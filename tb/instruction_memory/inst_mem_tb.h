@@ -27,7 +27,7 @@ SC_MODULE(InstMemTB) {
         dut->rst(rst);
         dut->r_req_i(r_req_i);
         dut->r_addr_i(r_addr_i);
-        dut->r_ack_i(r_ack_i);
+        dut->r_ack_o(r_ack_i);
         for (int i = 0; i < 4; i++)
             dut->r_data_o[i](r_data_o[i]);
 

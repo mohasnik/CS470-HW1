@@ -1,0 +1,315 @@
+$date
+     Mar 30, 2026       11:28:55
+$end
+
+$version
+ SystemC 2.3.4-Accellera --- Mar 19 2026 12:36:47
+$end
+
+$timescale
+     1 ps
+$end
+
+$scope module SystemC $end
+$var wire    1  aaaaa  clk       $end
+$var wire    1  aaaab  rst_ni       $end
+$var wire    1  aaaac  req_i       $end
+$var wire    1  aaaad  we_i       $end
+$var wire    4  aaaae  addr_i [3:0]  $end
+$var wire    8  aaaaf  wdata_i [7:0]  $end
+$var wire    8  aaaag  rdata_o [7:0]  $end
+$var wire    8  aaaah  mem_0 [7:0]  $end
+$var wire    8  aaaai  mem_1 [7:0]  $end
+$var wire    8  aaaaj  mem_2 [7:0]  $end
+$var wire    8  aaaak  mem_3 [7:0]  $end
+$var wire    8  aaaal  mem_4 [7:0]  $end
+$var wire    8  aaaam  mem_5 [7:0]  $end
+$var wire    8  aaaan  mem_6 [7:0]  $end
+$var wire    8  aaaao  mem_7 [7:0]  $end
+$var wire    8  aaaap  mem_8 [7:0]  $end
+$var wire    8  aaaaq  mem_9 [7:0]  $end
+$var wire    8  aaaar  mem_10 [7:0]  $end
+$var wire    8  aaaas  mem_11 [7:0]  $end
+$var wire    8  aaaat  mem_12 [7:0]  $end
+$var wire    8  aaaau  mem_13 [7:0]  $end
+$var wire    8  aaaav  mem_14 [7:0]  $end
+$var wire    8  aaaaw  mem_15 [7:0]  $end
+$upscope $end
+$enddefinitions  $end
+
+$comment
+All initial values are dumped below at time 0 sec = 0 timescale units.
+$end
+
+$dumpvars
+0aaaaa
+0aaaab
+0aaaac
+0aaaad
+b0 aaaae
+b0 aaaaf
+b0 aaaag
+b0 aaaah
+b0 aaaai
+b0 aaaaj
+b0 aaaak
+b0 aaaal
+b0 aaaam
+b0 aaaan
+b0 aaaao
+b0 aaaap
+b0 aaaaq
+b0 aaaar
+b0 aaaas
+b0 aaaat
+b0 aaaau
+b0 aaaav
+b0 aaaaw
+$end
+
+#5000
+1aaaaa
+
+#10000
+0aaaaa
+
+#15000
+1aaaaa
+
+#20000
+0aaaaa
+
+#25000
+1aaaaa
+
+#30000
+0aaaaa
+1aaaab
+
+#35000
+1aaaaa
+1aaaac
+1aaaad
+b10101010 aaaaf
+
+#40000
+0aaaaa
+
+#45000
+1aaaaa
+0aaaac
+0aaaad
+
+#50000
+0aaaaa
+
+#55000
+1aaaaa
+1aaaac
+1aaaad
+b1 aaaae
+b10111011 aaaaf
+b10101010 aaaah
+
+#60000
+0aaaaa
+
+#65000
+1aaaaa
+0aaaac
+0aaaad
+
+#70000
+0aaaaa
+
+#75000
+1aaaaa
+1aaaac
+1aaaad
+b10 aaaae
+b11001100 aaaaf
+b10111011 aaaai
+
+#80000
+0aaaaa
+
+#85000
+1aaaaa
+0aaaac
+0aaaad
+
+#90000
+0aaaaa
+
+#95000
+1aaaaa
+1aaaac
+1aaaad
+b101 aaaae
+b1010101 aaaaf
+b11001100 aaaaj
+
+#100000
+0aaaaa
+
+#105000
+1aaaaa
+0aaaac
+0aaaad
+
+#110000
+0aaaaa
+
+#115000
+1aaaaa
+1aaaac
+1aaaad
+b1111 aaaae
+b11111111 aaaaf
+b1010101 aaaam
+
+#120000
+0aaaaa
+
+#125000
+1aaaaa
+0aaaac
+0aaaad
+
+#130000
+0aaaaa
+
+#135000
+1aaaaa
+1aaaac
+b0 aaaae
+b11111111 aaaaw
+
+#140000
+0aaaaa
+
+#145000
+1aaaaa
+0aaaac
+
+#150000
+0aaaaa
+
+#155000
+1aaaaa
+b10101010 aaaag
+
+#160000
+0aaaaa
+
+#165000
+1aaaaa
+1aaaac
+b1 aaaae
+
+#170000
+0aaaaa
+
+#175000
+1aaaaa
+0aaaac
+
+#180000
+0aaaaa
+
+#185000
+1aaaaa
+b10111011 aaaag
+
+#190000
+0aaaaa
+
+#195000
+1aaaaa
+1aaaac
+b10 aaaae
+
+#200000
+0aaaaa
+
+#205000
+1aaaaa
+0aaaac
+
+#210000
+0aaaaa
+
+#215000
+1aaaaa
+b11001100 aaaag
+
+#220000
+0aaaaa
+
+#225000
+1aaaaa
+1aaaac
+b101 aaaae
+
+#230000
+0aaaaa
+
+#235000
+1aaaaa
+0aaaac
+
+#240000
+0aaaaa
+
+#245000
+1aaaaa
+b1010101 aaaag
+
+#250000
+0aaaaa
+
+#255000
+1aaaaa
+1aaaac
+b1111 aaaae
+
+#260000
+0aaaaa
+
+#265000
+1aaaaa
+0aaaac
+
+#270000
+0aaaaa
+
+#275000
+1aaaaa
+b11111111 aaaag
+
+#280000
+0aaaaa
+
+#285000
+1aaaaa
+1aaaac
+b111 aaaae
+
+#290000
+0aaaaa
+
+#295000
+1aaaaa
+0aaaac
+
+#300000
+0aaaaa
+
+#305000
+1aaaaa
+b0 aaaag
+
+#310000
+0aaaaa
+
+#315000

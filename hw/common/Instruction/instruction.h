@@ -17,6 +17,8 @@ enum OpcodeID {
     OP_REMU = 5,
 };
 
+static const Instruction reset_value;
+
 class Instruction
 {
 private:
@@ -34,9 +36,11 @@ private:
     OpcodeID opcode_id; // integer opcode, traceable in VCD
 
 public:
+
     Instruction(std::string inst_str);
     Instruction();
     ~Instruction();
+
 
     void parseInstruction(std::string inst);
 

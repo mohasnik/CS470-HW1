@@ -19,7 +19,8 @@ SC_MODULE(InstructionMemory) {
     sc_in<sc_logic> clk, rst;
     sc_in<sc_logic> r_req_i;
     sc_in<sc_uint<32>> r_addr_i;
-    sc_out<sc_logic> r_ack_i;
+    // sc_out<sc_logic> r_ack_o;
+    sc_out<sc_logic> r_valid_o[4];
 
     sc_out<Instruction> r_data_o[4];
 
@@ -93,21 +94,31 @@ void InstructionMemory<MEM_SIZE>::initValues() {
 template<int MEM_SIZE>
 void InstructionMemory<MEM_SIZE>::run() {
     while (true)
-    {   
-        r_ack_i = SC_LOGIC_0;
+    {    
+        // default values :
+        r_ack_o = SC_LOGIC_0;
+
+        for(int i = 0; i < 4; i++)
+            r_valid_o[i] = SC_LOGIC_0;
+        
 
         if (rst.read() == SC_LOGIC_1) {
-            r_ack_i = SC_LOGIC_0;
+            r_ack_o = SC_LOGIC_0;
+            for(int i = 0; i < 4; i++)
+                r_valid_o[i] = SC_LOGIC_0;
+            
         }
         else if (clk.posedge()) {
             if (r_req_i.read() == SC_LOGIC_1) {
                 // CHECK : enables unaligned read. unfavorable.
+                r_ack_o = SC_LOGIC_1;
                 wait(clk.posedge_event());
-    
+                
                 for(int i = 0; i < 4; i ++ )
                     r_data_o[i] = mem[(int)(r_addr_i.read()) + i];
+                    r_valid_o[i] = SC_LOGIC_1;
                 
-                r_ack_i = SC_LOGIC_1;
+                
             }
         }
 
