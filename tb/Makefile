@@ -37,7 +37,7 @@ all: $(TARGET_BIN)
 -include $(DEPFILE)
 
 $(TARGET_BIN): $(SRCS) | $(BUILD)
-	$(CXX) $(CXXFLAGS) -MMD -MP -MF $(DEPFILE) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -MMD -MP -MF $(DEPFILE) $(SRCS) -o $@ $(LDFLAGS)
 
 $(BUILD):
 	mkdir -p $(BUILD)
