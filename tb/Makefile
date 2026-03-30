@@ -12,11 +12,8 @@ CXXFLAGS := -std=c++17 -Wall \
             -I$(SYSTEMC_INC) \
             -I$(HW_ROOT)/common/Instruction \
             -I$(HW_ROOT)/common/instruction_memory \
-            -DPROJECT_SOURCE_DIR='"$(abspath ..)"' \
-            -MMD -MP
+            -DPROJECT_SOURCE_DIR='"$(abspath ..)"'
 LDFLAGS  := -L$(SYSTEMC_LIB) -lsystemc -Wl,-rpath,$(SYSTEMC_LIB)
-
-DEPS := $(patsubst %.cpp,$(BUILD)/%.d,$(notdir $(SRCS)))
 
 # ── Test selection ────────────────────────────────────────────────────────────
 
@@ -27,8 +24,9 @@ endif
 # Pull in test-specific variables: TARGET, SRCS, and optionally EXTRA_CXXFLAGS
 include $(TEST_DIR)/config.mk
 
-CXXFLAGS += $(EXTRA_CXXFLAGS)
+CXXFLAGS   += $(EXTRA_CXXFLAGS)
 TARGET_BIN := $(BUILD)/$(TARGET)
+DEPFILE    := $(BUILD)/$(TARGET).d
 
 # ── Rules ─────────────────────────────────────────────────────────────────────
 
@@ -36,10 +34,10 @@ TARGET_BIN := $(BUILD)/$(TARGET)
 
 all: $(TARGET_BIN)
 
--include $(DEPS)
+-include $(DEPFILE)
 
 $(TARGET_BIN): $(SRCS) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS) -MF $(BUILD)/$(notdir $<).d
+	$(CXX) $(CXXFLAGS) -MMD -MP -MF $(DEPFILE) $^ -o $@ $(LDFLAGS)
 
 $(BUILD):
 	mkdir -p $(BUILD)
