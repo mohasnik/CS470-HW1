@@ -12,8 +12,11 @@ CXXFLAGS := -std=c++17 -Wall \
             -I$(SYSTEMC_INC) \
             -I$(HW_ROOT)/common/Instruction \
             -I$(HW_ROOT)/common/instruction_memory \
-            -DPROJECT_SOURCE_DIR='"$(abspath ..)"'
+            -DPROJECT_SOURCE_DIR='"$(abspath ..)"' \
+            -MMD -MP
 LDFLAGS  := -L$(SYSTEMC_LIB) -lsystemc -Wl,-rpath,$(SYSTEMC_LIB)
+
+DEPS := $(patsubst %.cpp,$(BUILD)/%.d,$(notdir $(SRCS)))
 
 # ── Test selection ────────────────────────────────────────────────────────────
 
@@ -33,8 +36,10 @@ TARGET_BIN := $(BUILD)/$(TARGET)
 
 all: $(TARGET_BIN)
 
+-include $(DEPS)
+
 $(TARGET_BIN): $(SRCS) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS) -MF $(BUILD)/$(notdir $<).d
 
 $(BUILD):
 	mkdir -p $(BUILD)
