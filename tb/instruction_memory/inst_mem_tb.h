@@ -3,52 +3,65 @@
 
 #include <systemc.h>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <string>
 #include "instruction_memory.h"
 
-#define MEM_SIZE 256
+#define TB_MEM_SIZE  256
+#define TB_NUM_PORTS 4
+#define TB_BANK_WORDS (TB_MEM_SIZE / TB_NUM_PORTS)   // = 64
 
+using DUT = InstructionMemory<TB_MEM_SIZE, TB_NUM_PORTS>;
 
 SC_MODULE(InstMemTB) {
 
-    sc_signal<sc_logic>     clk;
-    sc_signal<sc_logic>     rst;
-    sc_signal<sc_logic>     r_req_i;
-    sc_signal<sc_uint<32>>  r_addr_i;
-    sc_signal<sc_logic>     r_ack_i;
-    sc_signal<Instruction>  r_data_o[4];
+    // ── DUT-facing signals ────────────────────────────────────────────────────
+    sc_signal<sc_logic>    clk;
+    sc_signal<sc_logic>    rst_ni;
+    sc_signal<sc_logic>    req_i;
+    sc_signal<DUT::addr_t> addr_i;
+    sc_signal<sc_logic>    r_ack_o;
+    sc_signal<Instruction> r_data_o[TB_NUM_PORTS];
 
-    InstructionTracer tr[4];  // VCD shadow tracers, one per r_data_o slot
+    // ── TB observation signals ────────────────────────────────────────────────
+    sc_signal<int>  pc;       // base instruction address currently being requested
 
-    InstructionMemory<MEM_SIZE> *dut;
+    // ── VCD tracers ───────────────────────────────────────────────────────────
+    InstructionTracer port_tr[TB_NUM_PORTS];
+    InstructionTracer bank_tr[TB_NUM_PORTS][TB_BANK_WORDS];
+
+    DUT         *dut;
+    std::string  json_path;
 
     SC_CTOR(InstMemTB) {
-        dut = new InstructionMemory<MEM_SIZE>("inst_mem");
-        dut->clk(clk);
-        dut->rst(rst);
-        dut->r_req_i(r_req_i);
-        dut->r_addr_i(r_addr_i);
-        dut->r_ack_o(r_ack_i);
-        for (int i = 0; i < 4; i++)
+        dut = new DUT("inst_mem");
+        dut->clk    (clk);
+        dut->rst_ni (rst_ni);
+        dut->req_i  (req_i);
+        dut->addr_i (addr_i);
+        dut->r_ack_o(r_ack_o);
+        for (int i = 0; i < TB_NUM_PORTS; i++)
             dut->r_data_o[i](r_data_o[i]);
 
-        r_req_i.write(SC_LOGIC_0);
-        r_addr_i.write(0);
+        req_i.write(SC_LOGIC_0);
+        addr_i.write(DUT::addr_t(0));
+        pc.write(-1);
 
         SC_THREAD(gen_clock);
         SC_THREAD(gen_reset);
         SC_THREAD(stimulus);
 
-        SC_METHOD(update_shadow);
-        for (int i = 0; i < 4; i++)
+        SC_METHOD(update_port_tracers);
+        for (int i = 0; i < TB_NUM_PORTS; i++)
             sensitive << r_data_o[i];
+
+        // poll bank cells every posedge (mem[] is a plain array, not sc_signal)
+        SC_METHOD(update_bank_tracers);
+        sensitive << clk.posedge_event();
     }
 
-    void update_shadow() {
-        for (int i = 0; i < 4; i++)
-            tr[i].update(r_data_o[i].read());
-    }
-
-    // 10 ns period clock
+    // ── Clock: 10 ns period ───────────────────────────────────────────────────
     void gen_clock() {
         clk.write(SC_LOGIC_0);
         while (true) {
@@ -59,42 +72,93 @@ SC_MODULE(InstMemTB) {
         }
     }
 
-    // reset high for first 30 ns, then deassert
+    // ── Reset: active-low, hold 3 cycles ─────────────────────────────────────
     void gen_reset() {
-        rst.write(SC_LOGIC_1);
-        wait(30, SC_NS);
-        rst.write(SC_LOGIC_0);
+        rst_ni.write(SC_LOGIC_0);
+        for (int i = 0; i < 3; i++)
+            wait(clk.posedge_event());
+        rst_ni.write(SC_LOGIC_1);
     }
 
-    // read all loaded instructions 4 at a time using req/ack handshake
+    void update_port_tracers() {
+        for (int i = 0; i < TB_NUM_PORTS; i++)
+            port_tr[i].update(r_data_o[i].read());
+    }
+
+    void update_bank_tracers() {
+        for (int b = 0; b < TB_NUM_PORTS; b++)
+            for (int w = 0; w < TB_BANK_WORDS; w++)
+                bank_tr[b][w].update(dut->banks[b]->mem[w]);
+    }
+
+    // ── Stimulus ──────────────────────────────────────────────────────────────
+    // Pipelined timing (BANK_LATENCY=1):
+    //   posedge N    : issue req for group 0 (delta)
+    //   posedge N+1  : SRAM latches group 0 → issue req for group 1 (delta)
+    //   posedge N+2  : SRAM latches group 1 → issue req for group 2 (delta)
+    //                  read group 0 data (bank_rdata from delta N+1)
+    //   posedge N+3  : read group 1 data, issue group 3 ...
+    // req_i stays high continuously — no idle cycle between groups.
     void stimulus() {
-        wait(rst.negedge_event());
+        wait(rst_ni.posedge_event());
+
+        // load instructions AFTER reset so resetValues() in SRAM doesn't wipe them
+        dut->loadFromJson(json_path);
+
+        // one idle cycle to let everything settle
         wait(clk.posedge_event());
 
-        int total = dut->loadedCount;
-        int groups = (total + 3) / 4;
+        int total  = dut->loadedCount;
+        int groups = (total + TB_NUM_PORTS - 1) / TB_NUM_PORTS;
+        int pass   = 0, fail = 0;
+
+        std::cout << "\n[TB] Starting reads — " << total
+                  << " instructions in " << groups << " groups\n";
+
+        // Issue first request
+        pc.write(0);
+        addr_i.write(DUT::addr_t(0));
+        req_i.write(SC_LOGIC_1);
+        wait(clk.posedge_event());   // posedge N+1: SRAM latches group 0
 
         for (int g = 0; g < groups; g++) {
-            int base_addr = g * 4;
+            int base = g * TB_NUM_PORTS;
 
-            r_addr_i.write(base_addr);
-            r_req_i.write(SC_LOGIC_1);
-
-            wait(r_ack_i.posedge_event());
-
-            std::cout << "[TB] Read group " << g
-                      << " (addr " << base_addr << "-" << base_addr + 3 << "):\n";
-            for (int i = 0; i < 4; i++) {
-                int pc = base_addr + i;
-                if (pc < total)
-                    std::cout << "  PC=" << pc << "  " << r_data_o[i].read() << "\n";
+            // Pipeline: immediately update addr for next group (req stays high)
+            // or deassert if this is the last group.
+            if (g + 1 < groups) {
+                int next_base = (g + 1) * TB_NUM_PORTS;
+                pc.write(next_base);
+                addr_i.write(DUT::addr_t(next_base));
+                // req_i stays SC_LOGIC_1
+            } else {
+                req_i.write(SC_LOGIC_0);
+                pc.write(-1);
             }
 
-            r_req_i.write(SC_LOGIC_0);
+            // posedge N+2+g: bank_rdata for group g valid (written in delta N+1+g)
             wait(clk.posedge_event());
+
+            for (int p = 0; p < TB_NUM_PORTS; p++) {
+                int pc_val = base + p;
+                if (pc_val >= total) break;
+
+                Instruction got      = r_data_o[p].read();
+                Instruction expected = dut->banks[p]->mem[g];
+
+                if (got == expected) {
+                    std::cout << "  [PASS] PC=" << pc_val << "  " << got << "\n";
+                    pass++;
+                } else {
+                    std::cout << "  [FAIL] PC=" << pc_val
+                              << "  got: "      << got
+                              << "  expected: " << expected << "\n";
+                    fail++;
+                }
+            }
         }
 
-        std::cout << "[TB] Done reading " << total << " instructions.\n";
+        std::cout << "\n[TB] Done — PASS: " << pass << "  FAIL: " << fail << "\n";
         sc_stop();
     }
 };

@@ -3,9 +3,12 @@
 #define __FETCH_STAGE_H__
 
 #include <systemc.h>
-#include "instruction_memory.h"
+#include "sram.h"
+#include "instruction.h"
+
+
 const uint32_t instruction_memory_size = 256;
-typedef InstructionMemory<instruction_memory_size> fetch_inst_mem;
+typedef Sram<1, instruction_memory_size, Instruction> fetch_inst_mem;
 
 SC_MODULE(fetch_stage) {
     sc_in<sc_logic> backp_stall;
