@@ -1,0 +1,328 @@
+$date
+     Mar 30, 2026       00:28:46
+$end
+
+$version
+ SystemC 2.3.4-Accellera --- Mar 19 2026 12:36:47
+$end
+
+$timescale
+     1 ps
+$end
+
+$scope module SystemC $end
+$var wire    1  aaaaa  clk       $end
+$var wire    1  aaaab  rst       $end
+$var wire    1  aaaac  r_req_i       $end
+$var wire   32  aaaad  r_addr_i [31:0]  $end
+$var wire    1  aaaae  r_ack_i       $end
+$scope module r_data_o_0 $end
+$var wire   32  aaaaf  opcode [31:0]  $end
+$var wire   32  aaaag  dest [31:0]  $end
+$var wire   32  aaaah  op_a [31:0]  $end
+$var wire   32  aaaai  op_b [31:0]  $end
+$var wire   32  aaaaj  imm [31:0]  $end
+$upscope $end
+$scope module r_data_o_1 $end
+$var wire   32  aaaak  opcode [31:0]  $end
+$var wire   32  aaaal  dest [31:0]  $end
+$var wire   32  aaaam  op_a [31:0]  $end
+$var wire   32  aaaan  op_b [31:0]  $end
+$var wire   32  aaaao  imm [31:0]  $end
+$upscope $end
+$scope module r_data_o_2 $end
+$var wire   32  aaaap  opcode [31:0]  $end
+$var wire   32  aaaaq  dest [31:0]  $end
+$var wire   32  aaaar  op_a [31:0]  $end
+$var wire   32  aaaas  op_b [31:0]  $end
+$var wire   32  aaaat  imm [31:0]  $end
+$upscope $end
+$scope module r_data_o_3 $end
+$var wire   32  aaaau  opcode [31:0]  $end
+$var wire   32  aaaav  dest [31:0]  $end
+$var wire   32  aaaaw  op_a [31:0]  $end
+$var wire   32  aaaax  op_b [31:0]  $end
+$var wire   32  aaaay  imm [31:0]  $end
+$upscope $end
+$upscope $end
+$enddefinitions  $end
+
+$comment
+All initial values are dumped below at time 0 sec = 0 timescale units.
+$end
+
+$dumpvars
+0aaaaa
+1aaaab
+0aaaac
+b0 aaaad
+0aaaae
+b1 aaaaf
+b0 aaaag
+b0 aaaah
+b11111111111111111111111111111111 aaaai
+b0 aaaaj
+b1 aaaak
+b0 aaaal
+b0 aaaam
+b11111111111111111111111111111111 aaaan
+b0 aaaao
+b1 aaaap
+b0 aaaaq
+b0 aaaar
+b11111111111111111111111111111111 aaaas
+b0 aaaat
+b1 aaaau
+b0 aaaav
+b0 aaaaw
+b11111111111111111111111111111111 aaaax
+b0 aaaay
+$end
+
+#5000
+1aaaaa
+
+#10000
+0aaaaa
+
+#15000
+1aaaaa
+
+#20000
+0aaaaa
+
+#25000
+1aaaaa
+
+#30000
+0aaaaa
+0aaaab
+
+#35000
+1aaaaa
+1aaaac
+
+#40000
+0aaaaa
+
+#45000
+1aaaaa
+
+#50000
+0aaaaa
+
+#55000
+1aaaaa
+0aaaac
+1aaaae
+b1 aaaag
+b1 aaaah
+b1 aaaaj
+b10 aaaal
+b10 aaaam
+b10 aaaao
+b11 aaaaq
+b11 aaaar
+b11 aaaat
+b100 aaaav
+b100 aaaaw
+b100 aaaay
+
+#60000
+0aaaaa
+
+#65000
+1aaaaa
+1aaaac
+b100 aaaad
+0aaaae
+
+#70000
+0aaaaa
+
+#75000
+1aaaaa
+
+#80000
+0aaaaa
+
+#85000
+1aaaaa
+0aaaac
+1aaaae
+b0 aaaag
+b0 aaaah
+b0 aaaal
+b0 aaaam
+b1010 aaaao
+b0 aaaaq
+b0 aaaar
+b1100100 aaaat
+b0 aaaav
+b0 aaaaw
+b1111101000 aaaay
+
+#90000
+0aaaaa
+
+#95000
+1aaaaa
+1aaaac
+b1000 aaaad
+0aaaae
+
+#100000
+0aaaaa
+
+#105000
+1aaaaa
+
+#110000
+0aaaaa
+
+#115000
+1aaaaa
+0aaaac
+1aaaae
+b10 aaaag
+b0 aaaak
+b11 aaaal
+b10 aaaam
+b1 aaaan
+b0 aaaao
+b0 aaaap
+b11 aaaar
+b11 aaaas
+b0 aaaat
+b10 aaaau
+b0 aaaax
+b0 aaaay
+
+#120000
+0aaaaa
+
+#125000
+1aaaaa
+1aaaac
+b1100 aaaad
+0aaaae
+
+#130000
+0aaaaa
+
+#135000
+1aaaaa
+
+#140000
+0aaaaa
+
+#145000
+1aaaaa
+0aaaac
+1aaaae
+b100 aaaaf
+b0 aaaag
+b0 aaaai
+b0 aaaaj
+b1 aaaak
+b0 aaaal
+b0 aaaam
+b11111111111111111111111111111111 aaaan
+b1010 aaaao
+b1 aaaap
+b100 aaaaq
+b0 aaaar
+b11111111111111111111111111111111 aaaas
+b10100 aaaat
+b1 aaaau
+b10 aaaav
+b11111111111111111111111111111111 aaaax
+b11110 aaaay
+
+#150000
+0aaaaa
+
+#155000
+1aaaaa
+1aaaac
+b10000 aaaad
+0aaaae
+
+#160000
+0aaaaa
+
+#165000
+1aaaaa
+
+#170000
+0aaaaa
+
+#175000
+1aaaaa
+0aaaac
+1aaaae
+b10 aaaaf
+b10 aaaag
+b10 aaaah
+b11 aaaai
+b10 aaaak
+b11 aaaal
+b10 aaaan
+b0 aaaao
+b10 aaaap
+b1 aaaaq
+b10 aaaar
+b0 aaaas
+b0 aaaat
+b10 aaaau
+b11 aaaav
+b11 aaaaw
+b1 aaaax
+b0 aaaay
+
+#180000
+0aaaaa
+
+#185000
+1aaaaa
+1aaaac
+b10100 aaaad
+0aaaae
+
+#190000
+0aaaaa
+
+#195000
+1aaaaa
+
+#200000
+0aaaaa
+
+#205000
+1aaaaa
+0aaaac
+1aaaae
+b1 aaaaf
+b0 aaaag
+b0 aaaah
+b11111111111111111111111111111111 aaaai
+b1 aaaaj
+b1 aaaak
+b0 aaaal
+b11111111111111111111111111111111 aaaan
+b1 aaaao
+b1 aaaap
+b0 aaaaq
+b0 aaaar
+b11111111111111111111111111111111 aaaas
+b1 aaaat
+b1 aaaau
+b0 aaaav
+b0 aaaaw
+b11111111111111111111111111111111 aaaax
+b1 aaaay
+
+#210000
+0aaaaa
+
+#215000
