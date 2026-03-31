@@ -20,8 +20,8 @@ SC_MODULE(InstructionMemory) {
     // Each bank holds MEM_SIZE/NUM_PORTS instructions, round-robin distributed.
     static constexpr int BANK_WORDS          = MEM_SIZE / NUM_PORTS;
     static constexpr int BANK_LATENCY        = 1;
-    static constexpr int ADDRESS_WIDTH       = clog2<MEM_SIZE>();       // fixed: removed extra >
-    static constexpr int BANK_ADDRESS_WIDTH  = clog2<BANK_WORDS>();     // fixed: removed extra >
+    static constexpr int ADDRESS_WIDTH       = clog2(MEM_SIZE);
+    static constexpr int BANK_ADDRESS_WIDTH  = clog2(BANK_WORDS);
 
     using Bank        = Sram<BANK_LATENCY, BANK_WORDS, Instruction>;
     using addr_t      = sc_lv<ADDRESS_WIDTH>;
@@ -134,6 +134,8 @@ void InstructionMemory<MEM_SIZE, NUM_PORTS>::combinationalAssignments()
 
     // upper BANK_ADDRESS_WIDTH bits of addr_i select the row within each bank
     bank_addr_t baddr = addr_i.read().range(ADDRESS_WIDTH - 1, ADDRESS_WIDTH - BANK_ADDRESS_WIDTH);
+
+    std::cout << "baddr : " << baddr.to_uint() << std::endl;
 
     for (int i = 0; i < NUM_PORTS; i++) {
         bank_addr[i].write(baddr);

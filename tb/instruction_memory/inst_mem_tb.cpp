@@ -9,7 +9,7 @@ int sc_main(int argc, char* argv[]) {
 
     std::string json_path = (argc > 1)
         ? argv[1]
-        : std::string(PROJECT_SOURCE_DIR) + "/given_tests/01/input.json";
+        : std::string(PROJECT_SOURCE_DIR) + "/given_tests/07/input.json";
 
     InstMemTB tb("tb");
     tb.json_path = json_path;   // stimulus thread calls loadFromJson after reset
@@ -21,7 +21,8 @@ int sc_main(int argc, char* argv[]) {
     sc_trace(tf, tb.rst_ni, "rst_ni");
     sc_trace(tf, tb.req_i,  "req_i");
     sc_trace(tf, tb.r_ack_o,"r_ack_o");
-    sc_trace(tf, tb.pc,     "pc");
+    sc_trace(tf, tb.pc,        "pc");
+    sc_trace(tf, tb.output_pc, "output_pc");
 
     // ── Output ports — each Instruction grouped as r_data_o_N.field ──────────
     for (int i = 0; i < TB_NUM_PORTS; i++)

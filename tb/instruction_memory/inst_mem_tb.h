@@ -25,11 +25,19 @@ SC_MODULE(InstMemTB) {
     sc_signal<Instruction> r_data_o[TB_NUM_PORTS];
 
     // ── TB observation signals ────────────────────────────────────────────────
-    sc_signal<int>  pc;       // base instruction address currently being requested
+    sc_signal<int>  pc;           // base address currently being requested (1 cycle ahead)
+    sc_signal<int>  output_pc;    // base address whose data is currently on r_data_o (VCD-aligned)
 
     // ── VCD tracers ───────────────────────────────────────────────────────────
     InstructionTracer port_tr[TB_NUM_PORTS];
     InstructionTracer bank_tr[TB_NUM_PORTS][TB_BANK_WORDS];
+
+    // ── Golden reference (PC-indexed, independent of bank layout) ────────────
+    // reference[i] = instruction at PC i, loaded directly from bank memory
+    // in round-robin order after loadFromJson().
+    // Comparing r_data_o[p] against reference[base+p] catches bugs in
+    // both SRAM reads AND the round-robin distribution itself.
+    Instruction reference[TB_MEM_SIZE];
 
     DUT         *dut;
     std::string  json_path;
@@ -47,6 +55,7 @@ SC_MODULE(InstMemTB) {
         req_i.write(SC_LOGIC_0);
         addr_i.write(DUT::addr_t(0));
         pc.write(-1);
+        output_pc.write(-1);
 
         SC_THREAD(gen_clock);
         SC_THREAD(gen_reset);
@@ -80,6 +89,15 @@ SC_MODULE(InstMemTB) {
         rst_ni.write(SC_LOGIC_1);
     }
 
+    // ── Reference loader ──────────────────────────────────────────────────────
+    // Reconstructs a flat PC-ordered array from the bank memory.
+    // Instruction i was written to banks[i % NUM_PORTS]->mem[i / NUM_PORTS],
+    // so we reverse that mapping here.
+    void loadReference() {
+        for (int i = 0; i < dut->loadedCount; i++)
+            reference[i] = dut->banks[i % TB_NUM_PORTS]->mem[i / TB_NUM_PORTS];
+    }
+
     void update_port_tracers() {
         for (int i = 0; i < TB_NUM_PORTS; i++)
             port_tr[i].update(r_data_o[i].read());
@@ -104,6 +122,7 @@ SC_MODULE(InstMemTB) {
 
         // load instructions AFTER reset so resetValues() in SRAM doesn't wipe them
         dut->loadFromJson(json_path);
+        loadReference();   // build flat PC-indexed reference from banks
 
         // one idle cycle to let everything settle
         wait(clk.posedge_event());
@@ -138,13 +157,15 @@ SC_MODULE(InstMemTB) {
 
             // posedge N+2+g: bank_rdata for group g valid (written in delta N+1+g)
             wait(clk.posedge_event());
+            output_pc.write(base);  // aligns with r_data_o in VCD (both settle in this delta)
 
+            // check all 4 parallel outputs against the PC-indexed reference
             for (int p = 0; p < TB_NUM_PORTS; p++) {
                 int pc_val = base + p;
                 if (pc_val >= total) break;
 
                 Instruction got      = r_data_o[p].read();
-                Instruction expected = dut->banks[p]->mem[g];
+                Instruction expected = reference[pc_val];   // independent of bank layout
 
                 if (got == expected) {
                     std::cout << "  [PASS] PC=" << pc_val << "  " << got << "\n";

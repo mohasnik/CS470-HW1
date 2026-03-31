@@ -1,6 +1,6 @@
 # ── Shared configuration ──────────────────────────────────────────────────────
 
-SYSTEMC_HOME ?= /Users/mohasnik/systemc
+SYSTEMC_HOME ?= /root/systemc
 SYSTEMC_INC  := $(SYSTEMC_HOME)/include
 SYSTEMC_LIB  := $(SYSTEMC_HOME)/lib
 

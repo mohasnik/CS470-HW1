@@ -2,14 +2,12 @@
 #define __SRAM_H__
 
 #include <systemc.h>
-
-template<int N>
-constexpr int clog2() { return (N <= 2) ? 1 : 1 + clog2<(N + 1) / 2>(); }
+#include "../utils.h"
 
 template<int LATENCY, int NUM_WORDS, typename data_t>
 SC_MODULE(Sram) {
 
-    static constexpr int address_size = clog2<NUM_WORDS>();
+    static constexpr int address_size = clog2(NUM_WORDS);
     typedef sc_lv<address_size> sram_address_t;
 
     sc_in<sc_logic> clk_i;
