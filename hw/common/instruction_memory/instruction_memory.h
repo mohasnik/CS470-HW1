@@ -8,7 +8,7 @@
 #include <fstream>
 
 template<int MEM_SIZE, int NUM_PORTS>
-SC_MODULE(InstructionMemory) {
+SC_MODULE(instruction_memory) {
 
     static_assert((NUM_PORTS & (NUM_PORTS - 1)) == 0 && NUM_PORTS > 0,
               "NUM_PORTS must be a power of 2");
@@ -48,7 +48,7 @@ SC_MODULE(InstructionMemory) {
     Bank* banks[NUM_PORTS];
     int   loadedCount = 0;
 
-    SC_CTOR(InstructionMemory) {
+    SC_CTOR(instruction_memory) {
         initModules();
 
         SC_METHOD(delayCount);
@@ -77,7 +77,7 @@ SC_MODULE(InstructionMemory) {
     void loadFromJson(std::string filePath) {
         std::ifstream f(filePath);
         if (!f) {
-            std::cerr << "[InstructionMemory] Cannot open: " << filePath << "\n";
+            std::cerr << "[instruction_memory] Cannot open: " << filePath << "\n";
             return;
         }
 
@@ -100,7 +100,7 @@ SC_MODULE(InstructionMemory) {
         }
 
         loadedCount = count;
-        std::cout << "[InstructionMemory] Loaded " << count
+        std::cout << "[instruction_memory] Loaded " << count
                   << " instructions across " << NUM_PORTS << " banks ("
                   << BANK_WORDS << " words/bank) from " << filePath << "\n";
     }
@@ -116,7 +116,7 @@ SC_MODULE(InstructionMemory) {
 
 
 template<int MEM_SIZE, int NUM_PORTS>
-void InstructionMemory<MEM_SIZE, NUM_PORTS>::delayCount() {
+void instruction_memory<MEM_SIZE, NUM_PORTS>::delayCount() {
     if (rst_ni == SC_LOGIC_0 || req_i == SC_LOGIC_0)
         delay_counter.write(0);
     else
@@ -125,7 +125,7 @@ void InstructionMemory<MEM_SIZE, NUM_PORTS>::delayCount() {
 
 
 template<int MEM_SIZE, int NUM_PORTS>
-void InstructionMemory<MEM_SIZE, NUM_PORTS>::combinationalAssignments()
+void instruction_memory<MEM_SIZE, NUM_PORTS>::combinationalAssignments()
 {
     sc_logic req_value = (rst_ni == SC_LOGIC_0) ? SC_LOGIC_0 : req_i.read();
 
@@ -149,7 +149,7 @@ void InstructionMemory<MEM_SIZE, NUM_PORTS>::combinationalAssignments()
 }
 
 template<int MEM_SIZE, int NUM_PORTS>
-void InstructionMemory<MEM_SIZE, NUM_PORTS>::initModules() {
+void instruction_memory<MEM_SIZE, NUM_PORTS>::initModules() {
 
     for (int i = 0; i < NUM_PORTS; i++) {
         banks[i] = new Bank(sc_gen_unique_name("bank"));

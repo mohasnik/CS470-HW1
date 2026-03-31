@@ -12,7 +12,7 @@
 #define TB_NUM_PORTS 4
 #define TB_BANK_WORDS (TB_MEM_SIZE / TB_NUM_PORTS)   // = 64
 
-using DUT = InstructionMemory<TB_MEM_SIZE, TB_NUM_PORTS>;
+using DUT = instruction_memory<TB_MEM_SIZE, TB_NUM_PORTS>;
 
 SC_MODULE(InstMemTB) {
 

@@ -9,7 +9,7 @@
 #define TB_MAX_COUNT  10
 #define TB_RUN_CYCLES 200   // total cycles to run the random test
 
-using DUT = Counter<TB_MAX_COUNT>;
+using DUT = counter<TB_MAX_COUNT>;
 
 SC_MODULE(CounterTB) {
 
