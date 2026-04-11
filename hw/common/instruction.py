@@ -20,10 +20,13 @@ class Instruction:
         self.src_a = src_a         # architectural source A register (0-31)
         self.src_b = src_b         # architectural source B register (0-31), None for addi
         self.imm = imm             # immediate value (only for addi), None otherwise
-        self.is_imm = imm is not None
+    
+
+    def isImmediate(self) -> bool:
+        return (self.imm is not None)
 
     @classmethod
-    def from_string(cls, s: str, pc: int) -> "Instruction":
+    def from_string(cls, s: str) -> "Instruction":
         """Parse an instruction string like 'addi x1, x2, 10' or 'add x0, x1, x2'."""
         s = s.strip()
 
@@ -34,7 +37,7 @@ class Instruction:
             src_a = int(m.group(3))
             imm = int(m.group(4))
             # addi is treated as "add" in the pipeline (opcode stored as "add")
-            return cls(pc, "add", dest, src_a, src_b=None, imm=imm)
+            return cls("add", dest, src_a, src_b=None, imm=imm)
 
         m = cls._RE_REG_REG.match(s)
         if m:
@@ -42,7 +45,7 @@ class Instruction:
             dest = int(m.group(2))
             src_a = int(m.group(3))
             src_b = int(m.group(4))
-            return cls(pc, opcode, dest, src_a, src_b=src_b, imm=None)
+            return cls(opcode, dest, src_a, src_b=src_b, imm=None)
 
         raise ValueError(f"Cannot parse instruction: '{s}'")
 
@@ -52,8 +55,8 @@ class Instruction:
         return self.opcode
 
     def __repr__(self):
-        if self.is_imm:
-            return f"Instruction(PC={self.pc}, addi x{self.dest}, x{self.src_a}, {self.imm})"
-        return f"Instruction(PC={self.pc}, {self.opcode} x{self.dest}, x{self.src_a}, x{self.src_b})"
+        if self.isImmediate():
+            return f"Instruction(addi x{self.dest}, x{self.src_a}, {self.imm})"
+        return f"Instruction({self.opcode} x{self.dest}, x{self.src_a}, x{self.src_b})"
 
 
