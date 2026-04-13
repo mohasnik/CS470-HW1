@@ -12,13 +12,14 @@ from copy import deepcopy
 class IQEntry:
     pc: int
     opcode: str
-    dest_register: int
-    op_a_is_ready: bool
-    op_a_reg_tag: int | None
-    op_a_value: int | None
-    op_b_is_ready: bool
-    op_b_reg_tag: int | None
-    op_b_value: int | None
+    destPhysRegId: int
+    op0_Ready: bool
+    op0_physRegId: int | None
+    op0_value: int | None
+
+    op1_Ready: bool
+    op1_physRegId: int | None
+    op1_value: int | None
 
 
 class ProcessorState:
@@ -65,7 +66,7 @@ class CPU:
             numALUs=numALUs,
         )
         self.nextState : ProcessorState = deepcopy(self.currentState)
-        self.__execUnits = [ALU() for _ in range(numALUs)]
+        self.execUnits = [ALU() for _ in range(numALUs)]
 
     def parseInstructions(self, filePath):
         self.__instructionMemory = Instruction.from_json(filePath)
@@ -77,11 +78,18 @@ class CPU:
         return len(self.__instructionMemory) <= self.currentState.pc
     
 
+    ## REMOVE AFTER DEBUGGING:
+    def watchInstMem(self):
+        return self.__instructionMemory
+
     def activeListIsEmpty(self):
         return len(self.currentState.activeList) == 0
     
 
     def __propagateCommitStage(self):
+        if not self.currentState.activeList:
+            return
+
         head = self.currentState.activeList[0]
         if head.done:
             if head.exception == True:
@@ -98,7 +106,7 @@ class CPU:
 
     def __propagateIssue(self):
         self.nextState.execUnitInputs = [None] * self.currentState.numALUs
-        self.nextState.integerQueue = deepcopy(self.currentState.integerQueue)
+        # self.nextState.integerQueue = deepcopy(self.currentState.integerQueue)
 
         issued_indices = []
         alu_idx = 0
@@ -107,13 +115,13 @@ class CPU:
             if alu_idx >= self.currentState.numALUs:
                 break
 
-            if not (entry.op_a_is_ready and entry.op_b_is_ready):
+            if not (entry.op0_Ready and entry.op1_Ready):
                 continue
 
             self.nextState.execUnitInputs[alu_idx] = ExecOperation(
                 opcode=entry.opcode,
-                op0=entry.op_a_value,
-                op1=entry.op_b_value,
+                op0=entry.op0_value,
+                op1=entry.op1_value,
             )
             issued_indices.append(iq_idx)
             alu_idx += 1
@@ -121,52 +129,152 @@ class CPU:
         for iq_idx in reversed(issued_indices):
             self.nextState.integerQueue.pop(iq_idx)
 
+    def __propagateRenameDispatch(self):
+        valid_instructions : list[Instruction] = [instr for instr in self.currentState.DIR if instr is not None]
+
+        if not valid_instructions:
+            return
+
+        base_pc = self.currentState.pc - len(valid_instructions)
+
+        for offset, instruction in enumerate(valid_instructions):
+            if not self.nextState.freeList:
+                # TODO : check if this is corrcet
+                break
+
+            src_a_tag = self.nextState.regMapTable[instruction.src_a]
+            src_a_ready = not self.nextState.busyBitTable[src_a_tag]
+            src_a_value = self.nextState.physicalRegFile[src_a_tag]
+            # if src_a_value is None:
+            #     src_a_value = 0
+
+            if instruction.isImmediate():
+                src_b_tag = 0
+                src_b_ready = True
+                src_b_value = instruction.imm
+            else:
+                src_b_tag = self.nextState.regMapTable[instruction.src_b]
+                src_b_ready = not self.nextState.busyBitTable[src_b_tag]
+                src_b_value = self.nextState.physicalRegFile[src_b_tag]
+                if src_b_value is None:
+                    src_b_value = 0
+
+            old_dest = self.nextState.regMapTable[instruction.dest]
+            new_dest = self.nextState.freeList.pop(0)
+
+            self.nextState.regMapTable[instruction.dest] = new_dest
+            self.nextState.busyBitTable[new_dest] = True
+
+            self.nextState.activeList.append(
+                ActiveListEntry(
+                    done=False,
+                    exception=False,
+                    logicalDestination=instruction.dest,
+                    oldDestination=old_dest,
+                    pc=base_pc + offset,
+                    dest_pr=new_dest,
+                )
+            )
+
+            self.nextState.integerQueue.append(
+                IQEntry(
+                    pc=base_pc + offset,
+                    opcode=instruction.opcode,
+                    destPhysRegId=new_dest,
+                    op0_Ready=src_a_ready,
+                    op0_physRegId=src_a_tag,
+                    op0_value=src_a_value,
+                    op1_Ready=src_b_ready,
+                    op1_physRegId=src_b_tag,
+                    op1_value=src_b_value,
+                )
+            )
+
     def __propagateExecutionUnits(self):
-        for i, alu in enumerate(self.__execUnits):
+        for i, alu in enumerate(self.execUnits):
             alu.propagate(self.currentState.execUnitInputs[i])
 
 
     def __latchExecutionUnits(self):
-        for i, alu in enumerate(self.__execUnits):
+        for i, alu in enumerate(self.execUnits):
             self.nextState.execUnitResults[i] = alu.latch()
         
 
 
     def __propagateFetchDecode(self):
+        """
+            Combinational functionality of Fetch and Decode stage.
+            Updates the DIR register inputs, and also PC
+        """
         pc = self.currentState.pc
         instMemSize = len(self.__instructionMemory)
+        self.nextState.DIR = [None] * len(self.currentState.DIR)
 
-        for i in range(4):
-            if pc + i > instMemSize:
+        i = 0
+        while i < 4:
+            if pc + i >= instMemSize:
                 break
             else:
                 self.nextState.DIR[i] = self.__instructionMemory[pc + i]
-    
+            i +=1
+        
+        self.nextState.pc += i  ## Propagate PC here
+
+
     def __latchPC(self):
-        self.currentState.pc = self.nextState.pc
+        self.currentState.pc = deepcopy(self.nextState.pc)
 
 
     def __latchFetchDecode(self):
-        self.currentState.DIR = self.nextState.DIR
+        self.currentState.DIR = deepcopy(self.nextState.DIR)
 
+    def __latchRenameDispatch(self):
+        self.currentState.activeList = deepcopy(self.nextState.activeList)
+        self.currentState.regMapTable = deepcopy(self.nextState.regMapTable)
+        self.currentState.freeList = deepcopy(self.nextState.freeList)
+        self.currentState.physicalRegFile = deepcopy(self.nextState.physicalRegFile)
+        self.currentState.busyBitTable = deepcopy(self.nextState.busyBitTable)
+        self.currentState.exceptionPC = deepcopy(self.nextState.exceptionPC)
+        self.currentState.exceptionFlag = deepcopy(self.nextState.exceptionFlag)
+
+    def __latchIQ(self):
+        self.currentState.integerQueue = deepcopy(self.nextState.integerQueue)
+
+    def __latchIssue(self):
+        self.currentState.execUnitInputs = deepcopy(self.nextState.execUnitInputs)
 
     def propagate(self):
+        self.nextState = deepcopy(self.currentState)
+
         self.__propagateCommitStage()
         self.__propagateExecutionUnits()
         self.__propagateIssue()
-        
-        pass
+        self.__propagateRenameDispatch()
+        self.__propagateFetchDecode()
 
     def latch(self):
-        # commit stage ?
-
-        # ALUs
         self.__latchExecutionUnits()
-        self.__latchFetchDecode()
-        self.__latchPC()
-        
-        # self.currentState = deepcopy(self.nextState)
-        
-        
+        self.currentState = deepcopy(self.nextState)
+
 
         
+def main():
+    inputFile = "given_tests/01/input.json"
+    cpu = CPU(numALUs=4, numPhysicalRegisters=64, numLogicalRegisters=32)
+
+
+    cpu.parseInstructions(inputFile)
+
+    cycle = 0
+    while not (cpu.noInstructionsLeft()): ## WHY activeLists is empty ?
+        cpu.propagate()
+
+        #posedge clock here
+        cpu.latch()
+
+        cycle += 1
+
+
+
+if __name__ == "__main__":
+    main() 

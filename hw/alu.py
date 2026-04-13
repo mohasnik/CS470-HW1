@@ -16,8 +16,16 @@ class ALUResult:
     value: int = 0
     exception: bool = False
 
+    def NOP() -> ALUResult:
+        return ALUResult(value=None, exception=False)
+    
+    def isNop(self):
+        return self.value is None and self.exception == False
+
     def __post_init__(self):
-        self.value &= MASK64
+        if self.value is not None:
+            self.value &= MASK64
+
 
 
 class ALU:
@@ -29,10 +37,6 @@ class ALU:
         self._nextResult = None
 
     def propagate(self, operation: ExecOperation | None):
-        if operation is None:
-            self._nextResult = None
-            return
-
         self._nextResult = self._execute(operation)
 
     def latch(self) -> ALUResult | None:
@@ -47,6 +51,10 @@ class ALU:
         return completed_result
 
     def _execute(self, operation: ExecOperation) -> ALUResult:
+        if operation is None:
+            return ALUResult.NOP()
+        
+
         opcode = operation.opcode
         op0 = operation.op0
         op1 = operation.op1
