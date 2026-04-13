@@ -1,5 +1,6 @@
 
 
+import json
 from instruction import Instruction
 from activeList import ActiveListEntry
 from dataclasses import dataclass, field
@@ -22,6 +23,11 @@ class IQEntry:
     op1_value: int | None
 
 
+@dataclass
+class DIREntry:
+    pc : int
+    instruction : Instruction
+
 class ProcessorState:
     def __init__(
         self,
@@ -36,7 +42,7 @@ class ProcessorState:
 
         self.pc = pc
         self.physicalRegFile = [None] * self.numPhysicalRegisters
-        self.DIR = [None] * 4
+        self.DIR : list[DIREntry | None] = [None] * 4
 
         self.exceptionFlag = False
         self.exceptionPC = 0
@@ -67,6 +73,7 @@ class CPU:
         )
         self.nextState : ProcessorState = deepcopy(self.currentState)
         self.execUnits = [ALU() for _ in range(numALUs)]
+        self.__stateLog : list[dict] = []
 
     def parseInstructions(self, filePath):
         self.__instructionMemory = Instruction.from_json(filePath)
@@ -81,6 +88,47 @@ class CPU:
     ## REMOVE AFTER DEBUGGING:
     def watchInstMem(self):
         return self.__instructionMemory
+
+    def dumpStateIntoLog(self, outputPath: str | None = None):
+        decoded_entries = [entry for entry in self.currentState.DIR if entry is not None]
+        decoded_pcs = [entry.pc for entry in decoded_entries]
+
+        snapshot = {
+            "ActiveList": [entry.to_json() for entry in self.currentState.activeList],
+            "BusyBitTable": deepcopy(self.currentState.busyBitTable),
+            "DecodedPCs": decoded_pcs,
+            "Exception": self.currentState.exceptionFlag,
+            "ExceptionPC": self.currentState.exceptionPC,
+            "FreeList": deepcopy(self.currentState.freeList),
+            "IntegerQueue": [
+                {
+                    "DestRegister": entry.destPhysRegId,
+                    "OpAIsReady": entry.op0_Ready,
+                    "OpARegTag": 0 if entry.op0_physRegId is None else entry.op0_physRegId,
+                    "OpAValue": 0 if entry.op0_value is None else entry.op0_value,
+                    "OpBIsReady": entry.op1_Ready,
+                    "OpBRegTag": 0 if entry.op1_physRegId is None else entry.op1_physRegId,
+                    "OpBValue": 0 if entry.op1_value is None else entry.op1_value,
+                    "OpCode": entry.opcode,
+                    "PC": entry.pc,
+                }
+                for entry in self.currentState.integerQueue
+            ],
+            "PC": self.currentState.pc,
+            "PhysicalRegisterFile": [
+                0 if value is None else value
+                for value in self.currentState.physicalRegFile
+            ],
+            "RegisterMapTable": deepcopy(self.currentState.regMapTable),
+        }
+
+        self.__stateLog.append(snapshot)
+
+        if outputPath is not None:
+            with open(outputPath, "w") as f:
+                json.dump(self.__stateLog, f, indent=2)
+
+        return snapshot
 
     def activeListIsEmpty(self):
         return len(self.currentState.activeList) == 0
@@ -130,17 +178,17 @@ class CPU:
             self.nextState.integerQueue.pop(iq_idx)
 
     def __propagateRenameDispatch(self):
-        valid_instructions : list[Instruction] = [instr for instr in self.currentState.DIR if instr is not None]
+        valid_dir_entries: list[DIREntry] = [entry for entry in self.currentState.DIR if entry is not None]
 
-        if not valid_instructions:
+        if not valid_dir_entries:
             return
 
-        base_pc = self.currentState.pc - len(valid_instructions)
-
-        for offset, instruction in enumerate(valid_instructions):
+        for dir_entry in valid_dir_entries:
             if not self.nextState.freeList:
                 # TODO : check if this is corrcet
                 break
+
+            instruction = dir_entry.instruction
 
             src_a_tag = self.nextState.regMapTable[instruction.src_a]
             src_a_ready = not self.nextState.busyBitTable[src_a_tag]
@@ -171,14 +219,14 @@ class CPU:
                     exception=False,
                     logicalDestination=instruction.dest,
                     oldDestination=old_dest,
-                    pc=base_pc + offset,
+                    pc=dir_entry.pc,
                     dest_pr=new_dest,
                 )
             )
 
             self.nextState.integerQueue.append(
                 IQEntry(
-                    pc=base_pc + offset,
+                    pc=dir_entry.pc,
                     opcode=instruction.opcode,
                     destPhysRegId=new_dest,
                     op0_Ready=src_a_ready,
@@ -208,14 +256,14 @@ class CPU:
         """
         pc = self.currentState.pc
         instMemSize = len(self.__instructionMemory)
-        self.nextState.DIR = [None] * len(self.currentState.DIR)
+        self.nextState.DIR = []
 
         i = 0
         while i < 4:
             if pc + i >= instMemSize:
                 break
             else:
-                self.nextState.DIR[i] = self.__instructionMemory[pc + i]
+                self.nextState.DIR.append(DIREntry(pc + i, self.__instructionMemory[pc + i]))
             i +=1
         
         self.nextState.pc += i  ## Propagate PC here
@@ -253,9 +301,20 @@ class CPU:
         self.__propagateFetchDecode()
 
     def latch(self):
+        ## 5
         self.__latchExecutionUnits()
-        self.currentState = deepcopy(self.nextState)
+        ## 3 :
+        self.__latchIssue()
 
+        ## 2 :
+        self.__latchIQ()
+        self.__latchRenameDispatch()
+
+        ## 1 :
+        self.__latchFetchDecode()
+
+        ## 0 :
+        self.__latchPC()
 
         
 def main():
@@ -264,14 +323,18 @@ def main():
 
 
     cpu.parseInstructions(inputFile)
-
+    cpu.dumpStateIntoLog("output.json")
     cycle = 0
     while not (cpu.noInstructionsLeft()): ## WHY activeLists is empty ?
+        if cycle ==1 : 
+            break
+
         cpu.propagate()
 
         #posedge clock here
         cpu.latch()
 
+        cpu.dumpStateIntoLog("output.json")
         cycle += 1
 
 
