@@ -1,11 +1,9 @@
+import json
 import re
 
-# =============================================================================
-# Instruction
-# =============================================================================
 
 class Instruction:
-    # Regex patterns for parsing
+    # required pattern:
     _RE_REG_REG = re.compile(
         r"^(add|sub|mulu|divu|remu)\s+x(\d+),\s*x(\d+),\s*x(\d+)$"
     )
@@ -16,10 +14,10 @@ class Instruction:
     def __init__(self, opcode: str, dest: int, src_a: int,
                  src_b: int | None = None, imm: int | None = None):
         self.opcode = opcode      
-        self.dest = dest           # architectural dest register (0-31)
-        self.src_a = src_a         # architectural source A register (0-31)
-        self.src_b = src_b         # architectural source B register (0-31), None for addi
-        self.imm = imm             # immediate value (only for addi), None otherwise
+        self.dest = dest           
+        self.src_a = src_a         
+        self.src_b = src_b         
+        self.imm = imm             
     
 
     def isImmediate(self) -> bool:
@@ -48,6 +46,13 @@ class Instruction:
             return cls(opcode, dest, src_a, src_b=src_b, imm=None)
 
         raise ValueError(f"Cannot parse instruction: '{s}'")
+
+    @staticmethod
+    def from_json(path: str) -> list["Instruction"]:
+        """Read a JSON file containing a list of instruction strings and return a list of Instruction instances."""
+        with open(path) as f:
+            entries = json.load(f)
+        return [Instruction.from_string(s) for s in entries]
 
     @property
     def opcode_json(self) -> str:
