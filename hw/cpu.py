@@ -84,6 +84,8 @@ class CPU:
         self.nextState : ProcessorState = deepcopy(self.currentState)
         self.execUnits = [ALU() for _ in range(numALUs)]
         self.__stateLog : list[dict] = []
+        self.__backpressure : bool = False
+        
 
     def parseInstructions(self, filePath):
         self.__instructionMemory = Instruction.from_json(filePath)
@@ -92,7 +94,6 @@ class CPU:
         self.currentState = ProcessorState(self.__numLogicalRegs, self.__numPhysicalRegs, self.__numALUs)
         self.nextState = deepcopy(self.currentState)
 
-        
 
 
     def noInstructionsLeft(self):
@@ -146,6 +147,16 @@ class CPU:
 
     def activeListIsEmpty(self):
         return len(self.currentState.activeList) == 0
+    
+    def integerQueueIsFull(self):
+        return len(self.currentState.integerQueue) == 32
+
+    def activeListIsFull(self):
+        ## TODO : make it parametric
+        return len(self.currentState.activeList) == 32
+    
+    def freeListIsEmpty(self):
+        return len(self.currentState.freeList) == 0
     
 
     def __propagateCommitStage(self):
@@ -225,16 +236,29 @@ class CPU:
             return
 
         valid_dir_entries: list[DIREntry] = [entry for entry in self.currentState.DIR if entry is not None]
-        
 
         if not valid_dir_entries:
+            self.__backpressure = False
+            return
+
+        bundle_size = len(valid_dir_entries)
+        max_active_list_entries = 32
+        max_integer_queue_entries = 32
+
+        free_physical_regs = len(self.nextState.freeList)
+        free_active_list_entries = max_active_list_entries - len(self.nextState.activeList)
+        free_iq_entries = max_integer_queue_entries - len(self.nextState.integerQueue)
+
+        self.__backpressure = (
+            bundle_size > free_physical_regs
+            or bundle_size > free_active_list_entries
+            or bundle_size > free_iq_entries
+        )
+
+        if self.__backpressure:
             return
 
         for dir_entry in valid_dir_entries:
-            if not self.nextState.freeList:
-                # TODO : check if this is corrcet
-                break
-
             instruction = dir_entry.instruction
 
             # Use nextState here so same-cycle dispatch preserves in-order
@@ -323,7 +347,7 @@ class CPU:
             wakeup_iq(self.nextState.integerQueue, result)
             wakeup_iq(self.currentState.integerQueue, result)
 
-
+    
 
     def __updateActiveList(self, result : ALUResult):
         for entry in self.nextState.activeList:
@@ -352,6 +376,12 @@ class CPU:
         if self.nextState.exceptionFlag:
             self.nextState.DIR = []
             self.nextState.pc = CPU.EXCEPTION_PC_START
+            return
+
+        if self.__backpressure:
+            # hold decoded bundle and PC
+            self.nextState.DIR = deepcopy(self.currentState.DIR)
+            self.nextState.pc = self.currentState.pc
             return
 
         pc = self.currentState.pc
@@ -396,6 +426,7 @@ class CPU:
 
     def propagate(self):
         self.nextState = deepcopy(self.currentState)
+        self.__backpressure = False
 
         self.__propagateCommitStage()
         self.__propagateExecutionUnits()
