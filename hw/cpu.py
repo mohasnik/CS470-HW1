@@ -4,7 +4,7 @@ import json
 from instruction import Instruction
 from activeList import ActiveListEntry
 from dataclasses import dataclass, field
-from alu import ALU, ExecOperation
+from alu import ALU, ExecOperation, ALUResult
 from collections import deque
 from copy import deepcopy
 
@@ -14,6 +14,7 @@ class IQEntry:
     pc: int
     opcode: str
     destPhysRegId: int
+
     op0_Ready: bool
     op0_physRegId: int | None
     op0_value: int | None
@@ -34,14 +35,14 @@ class ProcessorState:
         numLogicalRegisters: int = 32,
         numPhysicalRegisters: int = 64,
         numALUs: int = 4,
-        pc: int = 0,
+        pc: int = 0x0,
     ):
         self.numLogicalRegisters = numLogicalRegisters
         self.numPhysicalRegisters = numPhysicalRegisters
         self.numALUs = numALUs
 
         self.pc = pc
-        self.physicalRegFile = [None] * self.numPhysicalRegisters
+        self.physicalRegFile = [0] * self.numPhysicalRegisters
         self.DIR : list[DIREntry | None] = [None] * 4
 
         self.exceptionFlag = False
@@ -53,8 +54,8 @@ class ProcessorState:
         self.activeList : list[ActiveListEntry] = []
         self.integerQueue : list[IQEntry] = []
 
-        self.execUnitInputs = [None] * self.numALUs
-        self.execUnitResults = [None] * self.numALUs
+        self.execUnitInputs : list[ExecOperation] = [None] * self.numALUs
+        self.execUnitResults : list[ALUResult] = [None] * self.numALUs
 
 
 
@@ -65,11 +66,16 @@ class CPU:
         numLogicalRegisters: int = 32,
         numPhysicalRegisters: int = 64,
     ):
+        
+        self.__numLogicalRegs = numLogicalRegisters
+        self.__numPhysicalRegs = numPhysicalRegisters
+        self.__numALUs = numALUs
+
         self.__instructionMemory = []
         self.currentState : ProcessorState = ProcessorState(
-            numLogicalRegisters=numLogicalRegisters,
-            numPhysicalRegisters=numPhysicalRegisters,
-            numALUs=numALUs,
+            numLogicalRegisters=self.__numLogicalRegs,
+            numPhysicalRegisters=self.__numPhysicalRegs,
+            numALUs=self.__numALUs,
         )
         self.nextState : ProcessorState = deepcopy(self.currentState)
         self.execUnits = [ALU() for _ in range(numALUs)]
@@ -79,7 +85,11 @@ class CPU:
         self.__instructionMemory = Instruction.from_json(filePath)
     
     def reset(self):
-        pass
+        self.currentState = ProcessorState(self.__numLogicalRegs, self.__numPhysicalRegs, self.__numALUs)
+        self.nextState = deepcopy(self.currentState)
+
+        
+
 
     def noInstructionsLeft(self):
         return len(self.__instructionMemory) <= self.currentState.pc
@@ -104,10 +114,10 @@ class CPU:
                 {
                     "DestRegister": entry.destPhysRegId,
                     "OpAIsReady": entry.op0_Ready,
-                    "OpARegTag": 0 if entry.op0_physRegId is None else entry.op0_physRegId,
+                    "OpARegTag": 0 if entry.op0_Ready or entry.op0_physRegId is None else entry.op0_physRegId,
                     "OpAValue": 0 if entry.op0_value is None else entry.op0_value,
                     "OpBIsReady": entry.op1_Ready,
-                    "OpBRegTag": 0 if entry.op1_physRegId is None else entry.op1_physRegId,
+                    "OpBRegTag": 0 if entry.op1_Ready or entry.op1_physRegId is None else entry.op1_physRegId,
                     "OpBValue": 0 if entry.op1_value is None else entry.op1_value,
                     "OpCode": entry.opcode,
                     "PC": entry.pc,
@@ -170,7 +180,9 @@ class CPU:
                 opcode=entry.opcode,
                 op0=entry.op0_value,
                 op1=entry.op1_value,
+                destPhysicalRegisterId=entry.destPhysRegId,
             )
+
             issued_indices.append(iq_idx)
             alu_idx += 1
 
@@ -243,10 +255,34 @@ class CPU:
             alu.propagate(self.currentState.execUnitInputs[i])
 
 
+    def __updateActiveList(self, result : ALUResult):
+        for entry in self.nextState.activeList:
+            if entry.dest_pr == result.destPhysicalRegisterId:
+                entry.done = True
+                entry.exception = result.exception
+                break
+
     def __latchExecutionUnits(self):
         for i, alu in enumerate(self.execUnits):
-            self.nextState.execUnitResults[i] = alu.latch()
-        
+            result = alu.latch()
+            
+            if result.isNop():
+                continue
+
+            ## Write back:
+            # TODO: check that updating current state does not temper with the fucntionality!
+            # Assumption 1 : we need somethoing that works like half clock for write and read in the second half clock
+            # Assumption 2 : WB is also with positive edge! (NOT CURRENT CASE)
+            # self.currentState.physicalRegFile[result.destPhysicalRegisterId] = result.value
+            self.nextState.physicalRegFile[result.destPhysicalRegisterId] = result.value
+            self.currentState.physicalRegFile[result.destPhysicalRegisterId] = result.value
+            
+            self.nextState.busyBitTable[result.destPhysicalRegisterId] = False
+            self.currentState.busyBitTable[result.destPhysicalRegisterId] = False
+
+            self.__updateActiveList(result)
+
+
 
 
     def __propagateFetchDecode(self):
@@ -301,6 +337,7 @@ class CPU:
         self.__propagateFetchDecode()
 
     def latch(self):
+
         ## 5
         self.__latchExecutionUnits()
         ## 3 :
@@ -320,13 +357,17 @@ class CPU:
 def main():
     inputFile = "given_tests/01/input.json"
     cpu = CPU(numALUs=4, numPhysicalRegisters=64, numLogicalRegisters=32)
+    maxCycles = 6
 
 
+    cpu.reset()
     cpu.parseInstructions(inputFile)
     cpu.dumpStateIntoLog("output.json")
+
+
     cycle = 0
     while not (cpu.noInstructionsLeft()): ## WHY activeLists is empty ?
-        if cycle ==1 : 
+        if cycle == maxCycles : 
             break
 
         cpu.propagate()

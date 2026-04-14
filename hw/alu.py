@@ -9,18 +9,22 @@ class ExecOperation:
     opcode: str
     op0: int
     op1: int
+    destPhysicalRegisterId : int
 
 
 @dataclass
 class ALUResult:
     value: int = 0
     exception: bool = False
+    destPhysicalRegisterId: int | None = None
 
     def NOP() -> ALUResult:
-        return ALUResult(value=None, exception=False)
+        return ALUResult(value=None, exception=False, destPhysicalRegisterId=None)
     
     def isNop(self):
-        return self.value is None and self.exception == False
+        return self.value is None and \
+              self.exception == False and \
+              self.destPhysicalRegisterId is None
 
     def __post_init__(self):
         if self.value is not None:
@@ -33,7 +37,7 @@ class ALU:
 
     def __init__(self, numPipelineRegisters: int = 1):
         self.numPipelineRegisters = numPipelineRegisters
-        self._pipelineRegisters = [None] * self.numPipelineRegisters
+        self._pipelineRegisters = [ALUResult.NOP()] * self.numPipelineRegisters
         self._nextResult = None
 
     def propagate(self, operation: ExecOperation | None):
@@ -58,24 +62,26 @@ class ALU:
         opcode = operation.opcode
         op0 = operation.op0
         op1 = operation.op1
+        dest = operation.destPhysicalRegisterId
+
 
         if opcode == "add":
-            return ALUResult(op0 + op1, False)
+            return ALUResult(value=op0 + op1, exception=False, destPhysicalRegisterId=dest)
 
         if opcode == "sub":
-            return ALUResult(op0 - op1, False)
+            return ALUResult(value=op0 - op1, exception=False, destPhysicalRegisterId=dest)
 
         if opcode == "mulu":
-            return ALUResult(op0 * op1, False)
+            return ALUResult(value=op0 * op1, exception=False, destPhysicalRegisterId=dest)
 
         if opcode == "divu":
             if op1 == 0:
-                return ALUResult(0, True)
-            return ALUResult(op0 // op1, False)
+                return ALUResult(value=0, exception=True, destPhysicalRegisterId=dest)
+            return ALUResult(value=op0 // op1, exception=False, destPhysicalRegisterId=dest)
 
         if opcode == "remu":
             if op1 == 0:
-                return ALUResult(0, True)
-            return ALUResult(op0 % op1, False)
+                return ALUResult(value=0, exception=True, destPhysicalRegisterId=dest)
+            return ALUResult(value=op0 % op1, exception=False, destPhysicalRegisterId=dest)
 
         raise ValueError(f"Unsupported opcode: {opcode}")
