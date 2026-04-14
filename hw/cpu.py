@@ -9,6 +9,8 @@ from collections import deque
 from copy import deepcopy
 
 
+
+
 @dataclass
 class IQEntry:
     pc: int
@@ -55,11 +57,13 @@ class ProcessorState:
         self.integerQueue : list[IQEntry] = []
 
         self.execUnitInputs : list[ExecOperation] = [None] * self.numALUs
-        self.execUnitResults : list[ALUResult] = [None] * self.numALUs
+        # self.execUnitResults : list[ALUResult] = [ALUResult.NOP()] * self.numALUs
 
 
 
 class CPU:
+    EXCEPTION_PC_START = 0x10000
+
     def __init__(
         self,
         numALUs: int = 4,
@@ -145,25 +149,52 @@ class CPU:
     
 
     def __propagateCommitStage(self):
-        if not self.currentState.activeList:
+        max_retire_per_cycle = 4
+
+        # Exception recovery mode: squash from the tail and restore precise state.
+        if self.currentState.exceptionFlag:
+            if not self.nextState.activeList:
+                self.nextState.exceptionFlag = False
+                return
+
+            rollback_count = min(max_retire_per_cycle, len(self.nextState.activeList))
+            for _ in range(rollback_count):
+                tail = self.nextState.activeList.pop()
+                self.nextState.regMapTable[tail.logicalDestination] = tail.oldDestination
+                self.nextState.freeList.append(tail.dest_pr)
+                self.nextState.busyBitTable[tail.dest_pr] = False
+
+            self.nextState.integerQueue.clear()
+            self.nextState.execUnitInputs = [None] * self.currentState.numALUs
             return
 
-        head = self.currentState.activeList[0]
-        if head.done:
-            if head.exception == True:
+        retired = 0
+
+        while retired < max_retire_per_cycle and self.nextState.activeList:
+            head = self.nextState.activeList[0]
+
+            if not head.done:
+                break
+
+            if head.exception:
                 self.nextState.exceptionFlag = True
                 self.nextState.exceptionPC = head.pc
-                ## TODO : may require additional steps here
-            else:
-                # self.nextState.freeList = deepcopy(self.currentState.freeList)
-                self.nextState.freeList.append(head.oldDestination)
+                self.nextState.integerQueue.clear()
+                self.nextState.execUnitInputs = [None] * self.currentState.numALUs
+                self.nextState.DIR = []
+                # Stop retirement on the first exception to preserve precise state.
+                break
 
-                # removing the head for next state
-                # self.nextState.activeList = deepcopy(self.currentState.activeList)
-                self.nextState.activeList.pop(0)
+            self.nextState.freeList.append(head.oldDestination)
+            self.nextState.activeList.pop(0)
+            retired += 1
 
     def __propagateIssue(self):
-        self.nextState.execUnitInputs = [None] * self.currentState.numALUs
+        if self.nextState.exceptionFlag:
+            self.nextState.execUnitInputs = [None] * self.currentState.numALUs
+            return
+
+        self.nextState.execUnitInputs = deepcopy(self.currentState.execUnitInputs)
         # self.nextState.integerQueue = deepcopy(self.currentState.integerQueue)
 
         issued_indices = []
@@ -190,7 +221,11 @@ class CPU:
             self.nextState.integerQueue.pop(iq_idx)
 
     def __propagateRenameDispatch(self):
+        if self.nextState.exceptionFlag:
+            return
+
         valid_dir_entries: list[DIREntry] = [entry for entry in self.currentState.DIR if entry is not None]
+        
 
         if not valid_dir_entries:
             return
@@ -202,11 +237,13 @@ class CPU:
 
             instruction = dir_entry.instruction
 
+            # Use nextState here so same-cycle dispatch preserves in-order
+            # rename dependencies within the decoded bundle.
             src_a_tag = self.nextState.regMapTable[instruction.src_a]
             src_a_ready = not self.nextState.busyBitTable[src_a_tag]
             src_a_value = self.nextState.physicalRegFile[src_a_tag]
-            # if src_a_value is None:
-            #     src_a_value = 0
+            if src_a_value is None:
+                src_a_value = 0
 
             if instruction.isImmediate():
                 src_b_tag = 0
@@ -251,8 +288,41 @@ class CPU:
             )
 
     def __propagateExecutionUnits(self):
+        if self.currentState.exceptionFlag or self.nextState.exceptionFlag:
+            return
+
+        def wakeup_iq(iq: list[IQEntry], result: ALUResult):
+            for entry in iq:
+                if (not entry.op0_Ready) and entry.op0_physRegId == result.destPhysicalRegisterId:
+                    entry.op0_Ready = True
+                    entry.op0_value = result.value
+
+                if (not entry.op1_Ready) and entry.op1_physRegId == result.destPhysicalRegisterId:
+                    entry.op1_Ready = True
+                    entry.op1_value = result.value
+
         for i, alu in enumerate(self.execUnits):
             alu.propagate(self.currentState.execUnitInputs[i])
+            result = alu.getResult()
+            
+
+            
+            if result == ALUResult.NOP():
+                continue
+
+            if result.exception:
+                continue
+
+            self.nextState.physicalRegFile[result.destPhysicalRegisterId] = result.value
+            self.currentState.physicalRegFile[result.destPhysicalRegisterId] = result.value
+            
+            self.nextState.busyBitTable[result.destPhysicalRegisterId] = False
+            self.currentState.busyBitTable[result.destPhysicalRegisterId] = False
+
+            # Broadcast the produced tag/value to waiting IQ operands.
+            wakeup_iq(self.nextState.integerQueue, result)
+            wakeup_iq(self.currentState.integerQueue, result)
+
 
 
     def __updateActiveList(self, result : ALUResult):
@@ -266,19 +336,8 @@ class CPU:
         for i, alu in enumerate(self.execUnits):
             result = alu.latch()
             
-            if result.isNop():
+            if self.nextState.exceptionFlag:
                 continue
-
-            ## Write back:
-            # TODO: check that updating current state does not temper with the fucntionality!
-            # Assumption 1 : we need somethoing that works like half clock for write and read in the second half clock
-            # Assumption 2 : WB is also with positive edge! (NOT CURRENT CASE)
-            # self.currentState.physicalRegFile[result.destPhysicalRegisterId] = result.value
-            self.nextState.physicalRegFile[result.destPhysicalRegisterId] = result.value
-            self.currentState.physicalRegFile[result.destPhysicalRegisterId] = result.value
-            
-            self.nextState.busyBitTable[result.destPhysicalRegisterId] = False
-            self.currentState.busyBitTable[result.destPhysicalRegisterId] = False
 
             self.__updateActiveList(result)
 
@@ -290,6 +349,11 @@ class CPU:
             Combinational functionality of Fetch and Decode stage.
             Updates the DIR register inputs, and also PC
         """
+        if self.nextState.exceptionFlag:
+            self.nextState.DIR = []
+            self.nextState.pc = CPU.EXCEPTION_PC_START
+            return
+
         pc = self.currentState.pc
         instMemSize = len(self.__instructionMemory)
         self.nextState.DIR = []
@@ -320,6 +384,9 @@ class CPU:
         self.currentState.busyBitTable = deepcopy(self.nextState.busyBitTable)
         self.currentState.exceptionPC = deepcopy(self.nextState.exceptionPC)
         self.currentState.exceptionFlag = deepcopy(self.nextState.exceptionFlag)
+
+        
+        
 
     def __latchIQ(self):
         self.currentState.integerQueue = deepcopy(self.nextState.integerQueue)
@@ -355,9 +422,9 @@ class CPU:
 
         
 def main():
-    inputFile = "given_tests/01/input.json"
+    inputFile = "given_tests/09/input.json"
     cpu = CPU(numALUs=4, numPhysicalRegisters=64, numLogicalRegisters=32)
-    maxCycles = 6
+    maxCycles = 100
 
 
     cpu.reset()
@@ -366,7 +433,7 @@ def main():
 
 
     cycle = 0
-    while not (cpu.noInstructionsLeft()): ## WHY activeLists is empty ?
+    while not (cpu.noInstructionsLeft() and cpu.activeListIsEmpty() and (not cpu.currentState.exceptionFlag)):
         if cycle == maxCycles : 
             break
 

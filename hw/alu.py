@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -29,6 +31,14 @@ class ALUResult:
     def __post_init__(self):
         if self.value is not None:
             self.value &= MASK64
+    
+    def __eq__(self, other):
+        if isinstance(other, ALUResult):
+            return self.value == other.value and \
+              self.exception == other.exception and \
+              self.destPhysicalRegisterId == other.destPhysicalRegisterId
+        else:
+            raise Exception("overloading fucntion does not support such comparision")
 
 
 
@@ -38,10 +48,15 @@ class ALU:
     def __init__(self, numPipelineRegisters: int = 1):
         self.numPipelineRegisters = numPipelineRegisters
         self._pipelineRegisters = [ALUResult.NOP()] * self.numPipelineRegisters
-        self._nextResult = None
+        self._nextResult : ALUResult = None
+        self._currentResult : ALUResult = None
 
     def propagate(self, operation: ExecOperation | None):
         self._nextResult = self._execute(operation)
+        self._currentResult = self._pipelineRegisters[-1]
+
+    def getResult(self) -> ALUResult:
+        return self._currentResult
 
     def latch(self) -> ALUResult | None:
         completed_result = self._pipelineRegisters[-1]
