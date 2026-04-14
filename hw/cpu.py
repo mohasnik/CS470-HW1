@@ -5,13 +5,30 @@ import json
 import os
 import sys
 from instruction import Instruction
-from activeList import ActiveListEntry
 from dataclasses import dataclass, field
 from alu import ALU, ExecOperation, ALUResult
 from collections import deque
 from copy import deepcopy
 
 
+
+@dataclass
+class ActiveListEntry:
+    done: bool
+    exception: bool
+    logicalDestination: int   
+    oldDestination: int       
+    pc: int
+    dest_pr: int      
+
+    def to_json(self):
+        return {
+            "Done": self.done,
+            "Exception": self.exception,
+            "LogicalDestination": self.logicalDestination,
+            "OldDestination": self.oldDestination,
+            "PC": self.pc
+        }
 
 
 @dataclass
