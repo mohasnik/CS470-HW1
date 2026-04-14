@@ -120,9 +120,6 @@ class CPU:
         return len(self.__instructionMemory) <= self.currentState.pc
     
 
-    ## REMOVE AFTER DEBUGGING:
-    def watchInstMem(self):
-        return self.__instructionMemory
 
     def dumpStateIntoLog(self, outputPath: str | None = None):
         decoded_entries = [entry for entry in self.currentState.DIR if entry is not None]
@@ -180,15 +177,14 @@ class CPU:
     
 
     def __propagateCommitStage(self):
-        max_retire_per_cycle = 4
+        maxRetirePerCycle = 4
 
-        # Exception recovery mode: squash from the tail and restore precise state.
         if self.currentState.exceptionFlag:
             if not self.nextState.activeList:
                 self.nextState.exceptionFlag = False
                 return
 
-            rollback_count = min(max_retire_per_cycle, len(self.nextState.activeList))
+            rollback_count = min(maxRetirePerCycle, len(self.nextState.activeList))
             for _ in range(rollback_count):
                 tail = self.nextState.activeList.pop()
                 self.nextState.regMapTable[tail.logicalDestination] = tail.oldDestination
@@ -201,7 +197,7 @@ class CPU:
 
         retired = 0
 
-        while retired < max_retire_per_cycle and self.nextState.activeList:
+        while retired < maxRetirePerCycle and self.nextState.activeList:
             head = self.nextState.activeList[0]
 
             if not head.done:
@@ -213,7 +209,6 @@ class CPU:
                 self.nextState.integerQueue.clear()
                 self.nextState.execUnitInputs = [None] * self.currentState.numALUs
                 self.nextState.DIR = []
-                # Stop retirement on the first exception to preserve precise state.
                 break
 
             self.nextState.freeList.append(head.oldDestination)
@@ -281,11 +276,10 @@ class CPU:
         for dir_entry in valid_dir_entries:
             instruction = dir_entry.instruction
 
-            # Use nextState here so same-cycle dispatch preserves in-order
-            # rename dependencies within the decoded bundle.
             src_a_tag = self.nextState.regMapTable[instruction.src_a]
             src_a_ready = not self.nextState.busyBitTable[src_a_tag]
             src_a_value = self.nextState.physicalRegFile[src_a_tag]
+
             if src_a_value is None:
                 src_a_value = 0
 
@@ -335,7 +329,7 @@ class CPU:
         if self.currentState.exceptionFlag or self.nextState.exceptionFlag:
             return
 
-        def wakeup_iq(iq: list[IQEntry], result: ALUResult):
+        def wakeupIQ(iq: list[IQEntry], result: ALUResult):
             for entry in iq:
                 if (not entry.op0_Ready) and entry.op0_physRegId == result.destPhysicalRegisterId:
                     entry.op0_Ready = True
@@ -364,8 +358,8 @@ class CPU:
             self.currentState.busyBitTable[result.destPhysicalRegisterId] = False
 
             # Broadcast the produced tag/value to waiting IQ operands.
-            wakeup_iq(self.nextState.integerQueue, result)
-            wakeup_iq(self.currentState.integerQueue, result)
+            wakeupIQ(self.nextState.integerQueue, result)
+            wakeupIQ(self.currentState.integerQueue, result)
 
     
 
@@ -458,6 +452,7 @@ class CPU:
 
         ## 5
         self.__latchExecutionUnits()
+        
         ## 3 :
         self.__latchIssue()
 
