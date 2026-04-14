@@ -1,6 +1,9 @@
 
 
+import argparse
 import json
+import os
+import sys
 from instruction import Instruction
 from activeList import ActiveListEntry
 from dataclasses import dataclass, field
@@ -453,27 +456,45 @@ class CPU:
 
         
 def main():
-    inputFile = "given_tests/09/input.json"
-    cpu = CPU(numALUs=4, numPhysicalRegisters=64, numLogicalRegisters=32)
-    maxCycles = 100
+    parser = argparse.ArgumentParser(
+        description="Cycle-accurate OoO470 simulator"
+    )
+    parser.add_argument("input_json", help="Path to input instruction JSON file")
+    parser.add_argument("output_json", help="Path to output schedule JSON file")
+    parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=1_000_000,
+        help="Safety limit for simulation cycles (default: 1000000)",
+    )
+    args = parser.parse_args()
 
+    inputFile = args.input_json
+    outputFile = args.output_json
+    maxCycles = args.max_cycles
+
+    outputDir = os.path.dirname(outputFile)
+    if outputDir:
+        os.makedirs(outputDir, exist_ok=True)
+
+    cpu = CPU(numALUs=4, numPhysicalRegisters=64, numLogicalRegisters=32)
 
     cpu.reset()
     cpu.parseInstructions(inputFile)
-    cpu.dumpStateIntoLog("output.json")
+    cpu.dumpStateIntoLog(outputFile)
 
 
     cycle = 0
     while not (cpu.noInstructionsLeft() and cpu.activeListIsEmpty() and (not cpu.currentState.exceptionFlag)):
-        if cycle == maxCycles : 
-            break
+        if cycle >= maxCycles:
+            raise RuntimeError(f"Simulation exceeded max cycles ({maxCycles})")
 
         cpu.propagate()
 
         #posedge clock here
         cpu.latch()
 
-        cpu.dumpStateIntoLog("output.json")
+        cpu.dumpStateIntoLog(outputFile)
         cycle += 1
 
 
